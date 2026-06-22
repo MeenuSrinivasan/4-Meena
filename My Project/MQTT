@@ -1,0 +1,56 @@
+import random
+import mysql.connector
+
+# Connect to MySQL
+connection = mysql.connector.connect(
+    host="localhost",
+    user="root",
+    password="",  
+    database="test"  
+)
+
+cursor = connection.cursor()
+
+# Create table if it doesn't exist
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS random_numbers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    random_number INT NOT NULL
+)
+""")
+
+# Generate a random number
+random_number = random.randint(1, 100)
+
+# Insert the random number into the table
+cursor.execute("INSERT INTO random_numbers (random_number) VALUES (%s)", (random_number,))
+connection.commit()
+
+cursor.execute("SELECT random_number FROM random_numbers ORDER BY id DESC LIMIT 1")
+result = cursor.fetchone()
+
+print(f"Random number {random_number} inserted into the database.")
+
+
+if result:
+    print(f" The latest random number is : {result[0]}")
+else:
+    print("No random numbers found in the database.")
+# Close the connection
+cursor.close()
+connection.close()
+
+from queue import Queue
+
+# Message queue (should be shared with the publisher)
+message_queue = Queue()
+
+def subscriber():
+    print("Subscriber: Listening for new numbers...")
+    while True:
+        if not message_queue.empty():
+            random_number = message_queue.get()  # Retrieve the latest number
+            print(f"Subscriber: Received number {random_number}")
+
+# Run subscriber (use threading/multiprocessing if needed)
+subscriber()

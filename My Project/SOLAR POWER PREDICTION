@@ -1,0 +1,93 @@
+#Import Required Libraries
+
+import pandas as pd
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from datetime import datetime, timedelta
+
+import psycopg2
+import time
+
+# Load dataset
+data = pd.read_csv("combined_data.csv")
+
+# Convert all values to numeric
+data = data.apply(pd.to_numeric, errors='coerce')
+
+# Replace NaN values with 0
+data.fillna(0, inplace=True)
+
+# Remove rows where GHI is zero
+data = data[data['GHI'] != 0]
+# Feature selection (example: time-based features)
+X = data.iloc[:, 0:5] # First 5 columns as input
+Y_temp = data['Temperature']
+Y_ghi = data['GHI']
+
+#Train Machine Learning Models
+# Train Linear Regression models
+temp_model = LinearRegression()
+ghi_model = LinearRegression()
+temp_model.fit(X, Y_temp)
+ghi_model.fit(X, Y_ghi)
+print("Models trained successfully")
+
+#PostgreSQL Database Connection
+conn = psycopg2.connect(
+host="localhost",
+database="solar_db",
+user="postgres",
+password="yourpassword"
+
+)
+cursor = conn.cursor()
+#Create Prediction Table
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS prediction (
+current_time_stamp TIMESTAMP NOT NULL,
+temperature FLOAT NOT NULL,
+ghi FLOAT NOT NULL,
+power FLOAT NOT NULL,
+time_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+""")
+conn.commit()
+#Power Calculation Function
+def calculate_power(temp, ghi):
+f = 0.18 * 7.4322 * ghi
+insi = temp - 25
+midd = 1 - 0.05 * insi
+power = f * midd
+return power
+#Real-Time Prediction Loop
+try:
+while True:
+now = datetime.now()
+# Create input features
+input_data = np.array([[
+now.year,
+now.month,
+now.day,
+now.hour,
+now.minute
+]])
+# Predictions
+pred_temp = temp_model.predict(input_data)[0]
+pred_ghi = ghi_model.predict(input_data)[0]
+
+# Power calculation
+power = calculate_power(pred_temp, pred_ghi)
+# Insert into database
+cursor.execute("""
+INSERT INTO prediction (current_time_stamp, temperature, ghi, power)
+VALUES (%s, %s, %s, %s)
+""", (now, float(pred_temp), float(pred_ghi), float(power)))
+conn.commit()
+print(f"[{now}] Temp: {pred_temp:.2f}, GHI: {pred_ghi:.2f}, Power: {power:.2f}")
+# Run every 10 minutes
+time.sleep(600)
+except KeyboardInterrupt:
+print("Prediction stopped by user")
+finally:
+cursor.close()
+conn.close()

@@ -1,0 +1,59 @@
+from keras.models import load_model  # TensorFlow is required for Keras to work
+from PIL import Image, ImageOps  # Use pillow for image processing
+import numpy as np
+from tensorflow.keras.layers import DepthwiseConv2D as KerasDepthwiseConv2D
+from tensorflow.keras import layers
+import tensorflow as tf
+
+# Custom DepthwiseConv2D class that supports older versions
+class CustomDepthwiseConv2D(KerasDepthwiseConv2D):
+    def __init__(self, *args, **kwargs):
+        if 'groups' in kwargs:
+            del kwargs['groups']  # Remove the 'groups' argument as it's not compatible
+        super().__init__(*args, **kwargs)
+
+# Disable scientific notation for clarity
+np.set_printoptions(suppress=True)
+
+# Load the model with the custom depthwise convolution layer
+try:
+    model = load_model("keras_Model.h5", custom_objects={
+        "DepthwiseConv2D": CustomDepthwiseConv2D
+    }, compile=False)
+except Exception as e:
+    print("Error loading model:", e)
+    exit()
+
+# Load the class labels
+with open("labels.txt", "r") as file:
+    class_names = [line.strip() for line in file.readlines()]
+
+# Create the array of the right shape to feed into the keras model
+data = np.ndarray(shape=(1, 224, 224, 3), dtype=np.float32)
+
+# Replace this with the path to your image
+image_path = (r"C:\Users\meena\OneDrive\Documents\Desktop\plant disease detection\train\corn(maize)rust\RS_Rust 1563_flipLR.JPG")  # Provide the correct image path
+image = Image.open(image_path).convert("RGB")
+
+# Resize the image to 224x224 and center-crop
+size = (224, 224)
+image = ImageOps.fit(image, size, Image.Resampling.LANCZOS)
+
+# Convert the image to a numpy array
+image_array = np.asarray(image)
+
+# Normalize the image (scale pixel values to range [-1, 1])
+normalized_image_array = (image_array.astype(np.float32) / 127.5) - 1
+
+# Load the image into the array
+data[0] = normalized_image_array
+
+# Make a prediction
+prediction = model.predict(data)
+index = np.argmax(prediction)
+class_name = class_names[index]
+confidence_score = prediction[0][index]
+
+# Print the prediction and confidence score
+print("Class:", class_name)
+print("Confidence Score:", confidence_score)

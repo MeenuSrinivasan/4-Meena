@@ -1,0 +1,61 @@
+import cv2
+import os
+import time
+from tkinter import Tk, filedialog
+
+# Load Haar Cascade classifiers
+face_classifier = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+eye_classifier = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_eye.xml")
+smile_classifier = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_smile.xml")
+upperbody_classifier = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_upperbody.xml")
+
+# Create directories for saving images
+output_dirs = {"eyes": "captured_eyes", "smiles": "smile_photos", "upper_body": "detected_upper_bodies"}
+for key, folder in output_dirs.items():
+    os.makedirs(folder, exist_ok=True)
+
+# Function to detect features in an image
+def detect_features(image_path):
+    frame = cv2.imread(image_path)
+    if frame is None:
+        print("Error loading image.")
+        return
+    
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    faces = face_classifier.detectMultiScale(gray, 1.1, 5, minSize=(40, 40))
+    
+    for (x, y, w, h) in faces:
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 4)
+        roi_gray = gray[y:y + h, x:x + w]
+        roi_color = frame[y:y + h, x:x + w]
+        
+        # Detect eyes
+        eyes = eye_classifier.detectMultiScale(roi_gray, 1.1, 10, minSize=(20, 20))
+        for (ex, ey, ew, eh) in eyes:
+            cv2.rectangle(roi_color, (ex, ey), (ex + ew, ey + eh), (255, 0, 0), 2)
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            cv2.imwrite(f"{output_dirs['eyes']}/eye_{timestamp}.jpg", frame)
+        
+        # Detect smile
+        smiles = smile_classifier.detectMultiScale(roi_gray, 1.7, 20)
+        for (sx, sy, sw, sh) in smiles:
+            cv2.rectangle(roi_color, (sx, sy), (sx + sw, sy + sh), (0, 0, 255), 2)
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            cv2.imwrite(f"{output_dirs['smiles']}/smile_{timestamp}.jpg", frame)
+    
+    # Detect upper body
+    upper_bodies = upperbody_classifier.detectMultiScale(gray, 1.1, 5, minSize=(50, 50))
+    for (ux, uy, uw, uh) in upper_bodies:
+        cv2.rectangle(frame, (ux, uy), (ux + uw, uy + uh), (255, 255, 0), 2)
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
+        cv2.imwrite(f"{output_dirs['upper_body']}/upperbody_{timestamp}.jpg", frame)
+    
+    cv2.imshow("Detected Features", frame)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+# Open file dialog to select an image
+Tk().withdraw()
+image_path = filedialog.askopenfilename(title="Select an Image", filetypes=[("Image Files", "*.jpg;*.jpeg;*.png")])
+if image_path:
+    detect_features(image_path)
